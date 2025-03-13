@@ -1,36 +1,46 @@
 import argparse
 
-def parse_cliargs():
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('--places', 
-    type=str, 
-    required=True, 
-    help="List of places near which you want to make a search")
+def parse_arguments():
+    """Parse command line arguments for the scraper."""
+    parser = argparse.ArgumentParser(
+        description='Scrape business information from Google Maps'
+    )
     
-    parser.add_argument('--query', 
-    type=str, 
-    required=True,
-    help="Beginning of the search query. Places will be appended to this query")
-
-    parser.add_argument('--pages',
-    type=int,
-    required=False,
-    help="Number of pages of results to scrape on each query")
-
-    parser.add_argument('--scrape-website', 
-    action="store_true",
-    required=False,
-    help="The scraper will work way slower if it scrapes websites too. This flag is here so the websites are optional")
-
-    parser.add_argument('--skip-duplicate-addresses',
-    action="store_true",
-    required=False,
-    help="Flag that indicates whether to skip results that have matching addresses")
-
-    parser.add_argument('--verbose',
-    action="store_true",
-    required=False,
-    help="Additional console output will be provided for each scraped result")
-
+    parser.add_argument(
+        'location',
+        help='Location to search in (e.g., "Ansbach")',
+        type=str
+    )
+    
+    parser.add_argument(
+        'business_type',
+        help='Type of business to search for (e.g., "electrician")',
+        type=str
+    )
+    
+    parser.add_argument(
+        '--max-results',
+        help='Maximum number of results to scrape (default: 20)',
+        type=int,
+        default=20
+    )
+    
+    parser.add_argument(
+        '--output',
+        help='Output Excel file path (default: businesses_TIMESTAMP.xlsx)',
+        type=str
+    )
+    
+    parser.add_argument(
+        '--headless',
+        help='Run Chrome in headless mode',
+        action='store_true'
+    )
+    
+    parser.add_argument(
+        '--verbose',
+        help='Enable verbose logging',
+        action='store_true'
+    )
+    
     return parser.parse_args()

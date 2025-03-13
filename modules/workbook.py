@@ -1,17 +1,34 @@
 from openpyxl import Workbook
-import openpyxl
-import requests
-import time
-import os
-import re
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+from typing import List
 
-def create_workbook():
-    """Create a new workbook with headers"""
-    workbook = Workbook()
-    sheet = workbook.active
+from .const.settings import Business
+
+def create_workbook(businesses: List[Business], output_file: str) -> None:
+    """Create an Excel workbook with business data."""
+    wb = Workbook()
     
-    # Define headers
-    headers = [
+    # Create main sheet
+    ws_businesses = wb.active
+    ws_businesses.title = 'Businesses'
+    
+    # Create reviews sheet
+    ws_reviews = wb.create_sheet('Reviews')
+    
+    # Style definitions
+    header_font = Font(bold=True, color='FFFFFF')
+    header_fill = PatternFill(start_color='4F81BD', end_color='4F81BD', fill_type='solid')
+    centered = Alignment(horizontal='center')
+    border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+    
+    # Business sheet headers
+    business_headers = [
         'Business Name',
         'Street Address',
         'Postal Code',
@@ -19,145 +36,74 @@ def create_workbook():
         'Phone',
         'Website',
         'Average Rating',
-        'Number of Reviews',
-        'Reviews'
+        'Number of Reviews'
     ]
     
-    # Write headers
-    for col, header in enumerate(headers, start=1):
-        sheet.cell(row=1, column=col, value=header)
+    # Review sheet headers
+    review_headers = [
+        'Business Name',
+        'Review Text',
+        'Rating',
+        'Time Posted',
+        'Positive Points',
+        'Negative Points',
+        'Services Used'
+    ]
     
-    return workbook
-
-def write_data_row(sheet, row_num, data):
-    """Write a row of data to the worksheet"""
-    # Add 2 to row_num because row 1 is headers
-    actual_row = row_num + 2
+    # Setup business sheet
+    for col, header in enumerate(business_headers, 1):
+        cell = ws_businesses.cell(row=1, column=col)
+        cell.value = header
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = centered
+        cell.border = border
     
-    # Split address into components if it exists
-    address = data.get('address', '')
-    street_address = ''
-    postal_code = ''
-    city = ''
+    # Setup review sheet
+    for col, header in enumerate(review_headers, 1):
+        cell = ws_reviews.cell(row=1, column=col)
+        cell.value = header
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = centered
+        cell.border = border
     
-    if address:
-        # Try to split address into components
-        # Swiss/German format: Street Name 123, 1234 City
-        parts = address.split(',')
-        if len(parts) >= 2:
-            street_address = parts[0].strip()
-            location_part = parts[1].strip()
-            
-            # Try to extract postal code and city
-            postal_match = re.search(r'\b\d{4,5}\b', location_part)
-            if postal_match:
-                postal_code = postal_match.group(0)
-                # City is everything after the postal code
-                city_match = re.search(rf'{postal_code}\s+(.*)', location_part)
-                if city_match:
-                    city = city_match.group(1).strip()
-            else:
-                # If no postal code found, just use the whole part as city
-                city = location_part
-        else:
-            # If no comma, try to extract postal code directly
-            postal_match = re.search(r'\b\d{4,5}\b', address)
-            if postal_match:
-                postal_code = postal_match.group(0)
-                # Split address at the postal code
-                parts = re.split(rf'\s*{postal_code}\s*', address)
-                if len(parts) >= 2:
-                    street_address = parts[0].strip()
-                    city = parts[1].strip()
-                else:
-                    street_address = address
-            else:
-                # If still no postal code found
-                street_address = address
+    # Fill business data
+    for row, business in enumerate(businesses, 2):
+        ws_businesses.cell(row=row, column=1).value = business.name
+        ws_businesses.cell(row=row, column=2).value = business.street_address
+        ws_businesses.cell(row=row, column=3).value = business.postal_code
+        ws_businesses.cell(row=row, column=4).value = business.city
+        ws_businesses.cell(row=row, column=5).value = business.phone
+        ws_businesses.cell(row=row, column=6).value = business.website
+        ws_businesses.cell(row=row, column=7).value = business.avg_rating
+        ws_businesses.cell(row=row, column=8).value = business.num_ratings
     
-    # Write data to cells
-    sheet.cell(row=actual_row, column=1, value=data.get('name', ''))
-    sheet.cell(row=actual_row, column=2, value=street_address)
-    sheet.cell(row=actual_row, column=3, value=postal_code)
-    sheet.cell(row=actual_row, column=4, value=city)
-    sheet.cell(row=actual_row, column=5, value=data.get('phone', ''))
-    sheet.cell(row=actual_row, column=6, value=data.get('website', ''))
-    sheet.cell(row=actual_row, column=7, value=data.get('rating', ''))
-    sheet.cell(row=actual_row, column=8, value=data.get('review_count', ''))
+    # Fill review data
+    review_row = 2
+    for business in businesses:
+        for review in business.reviews:
+            ws_reviews.cell(row=review_row, column=1).value = business.name
+            ws_reviews.cell(row=review_row, column=2).value = review.text
+            ws_reviews.cell(row=review_row, column=3).value = review.rating
+            ws_reviews.cell(row=review_row, column=4).value = review.time_posted
+            ws_reviews.cell(row=review_row, column=5).value = '\n'.join(review.positive_points) if review.positive_points else ''
+            ws_reviews.cell(row=review_row, column=6).value = '\n'.join(review.negative_points) if review.negative_points else ''
+            ws_reviews.cell(row=review_row, column=7).value = '\n'.join(review.services_used) if review.services_used else ''
+            review_row += 1
     
-    # Format reviews with new fields if present
-    reviews = data.get('reviews', [])
-    if reviews:
-        reviews_text = '\n\n'.join([
-            f"Rating: {r.get('rating', '')} stars\n"
-            f"Date: {r.get('date', '')}\n"
-            f"Comment: {r.get('text', '')}\n"
-            f"Positive Points: {', '.join(r.get('positive_points', []))}\n"
-            f"Negative Points: {', '.join(r.get('negative_points', []))}\n"
-            f"Services: {', '.join(r.get('services', []))}"
-            for r in reviews
-        ])
-        sheet.cell(row=actual_row, column=9, value=reviews_text)
-    else:
-        sheet.cell(row=actual_row, column=9, value='')
-
-def write_to_workbook(data, row, col, workbook_name="ScrapedData_GoogleMaps.xlsx", worksheet_name="Sheet1"):
-    # Validate paths
-    if not os.path.abspath(workbook_name).startswith(os.path.abspath(os.getcwd())):
-        raise ValueError("Invalid workbook path")
+    # Auto-adjust column widths
+    for ws in [ws_businesses, ws_reviews]:
+        for col in ws.columns:
+            max_length = 0
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2)
+            ws.column_dimensions[get_column_letter(col[0].column)].width = adjusted_width
     
-    # Validate row/column inputs
-    if not (isinstance(row, int) and isinstance(col, int)):
-        raise ValueError("Invalid row or column")
-    
-    # Open the Excel file
-    workbook = openpyxl.load_workbook(workbook_name)
-    try:
-        # Select the first sheet
-        sheet = workbook[worksheet_name]
-        # Write data to specified row and column
-        sheet.cell(row=row, column=col).value = data
-    finally:
-        workbook.save(workbook_name)
-
-def count_entries_in_workbook(workbook_name="ScrapedData_GoogleMaps.xlsx"):
-    # Open the Excel file
-    workbook = openpyxl.load_workbook(workbook_name)
-    try:
-        # Select the first sheet
-        sheet = workbook.worksheets[0]
-        # Count the number of rows in the sheet
-        num_rows = sheet.max_row
-    finally:
-        workbook.close()
-        # return the result
-        return num_rows
-
-def extract_column_from_row(row, column, workbook_name="ScrapedData_GoogleMaps.xlsx"):
-    # Open the Excel file
-    workbook = openpyxl.load_workbook(workbook_name)
-    try:
-        # Select the first sheet
-        sheet = workbook.worksheets[0]
-        # Extract value from specified column
-        column_value = sheet.cell(row=row, column=column).value
-    finally:
-        workbook.close()
-        return column_value
-
-def get_website_data(url):
-    if not url.startswith(('http://', 'https://')):
-        return None, None
-    
-    try:
-        response = requests.get(
-            url,
-            allow_redirects=False,  # Don't follow redirects
-            timeout=10,
-            verify=True  # Verify SSL certificates
-        )
-        # Add rate limiting
-        time.sleep(1)
-        return response.text, None
-    except Exception as e:
-        return None, str(e)
+    # Save workbook
+    wb.save(output_file)
